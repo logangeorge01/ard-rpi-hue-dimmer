@@ -1,0 +1,15 @@
+# Hue bridge address, API key and entertainment client key
+.hue.env
+*.env
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Arduino build output
+build/
+
+.DS_Store
