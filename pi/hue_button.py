@@ -14,11 +14,31 @@ import serial
 
 from hue_stream import HueStream
 
+ENV_FILE = os.path.expanduser(os.environ.get("HUE_ENV", "~/.hue.env"))
+
+
+def load_env(path):
+    """Read KEY=value lines (as written by pair.py); real environment variables win."""
+    if not os.path.exists(path):
+        return
+    with open(path) as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, v = line.split("=", 1)
+                os.environ.setdefault(k.strip(), v.strip().strip("\"'"))
+
+
+load_env(ENV_FILE)
+missing = [k for k in ("HUE_BRIDGE", "HUE_KEY", "HUE_CLIENTKEY") if not os.environ.get(k)]
+if missing:
+    raise SystemExit(f"missing {', '.join(missing)}: run pair.py or fill in {ENV_FILE}")
+
 BRIDGE = os.environ["HUE_BRIDGE"]
 KEY = os.environ["HUE_KEY"]
 CLIENTKEY = os.environ["HUE_CLIENTKEY"]
 PORT = os.environ.get("BUTTON_PORT", "/dev/ttyACM0")
-AREA_NAME = os.environ.get("HUE_AREA", "Living room")
+AREA_NAME = os.environ.get("HUE_AREA")  # default: the first entertainment area
 
 FRAME_INTERVAL = 0.04  # 25 frames/sec
 EASE = 0.35            # fraction of the remaining gap to close each frame
@@ -62,10 +82,17 @@ def hue(method, path, body=None):
 
 
 def find_area():
-    for c in hue("GET", "entertainment_configuration")["data"]:
+    areas = hue("GET", "entertainment_configuration")["data"]
+    names = [c["metadata"]["name"] for c in areas]
+    if not areas:
+        raise SystemExit("no entertainment areas on the bridge: create one in the Hue app")
+    if AREA_NAME is None:
+        print(f"using entertainment area {names[0]!r} (set HUE_AREA to pick from {names})", flush=True)
+        return areas[0]
+    for c in areas:
         if c["metadata"]["name"] == AREA_NAME:
             return c
-    raise RuntimeError(f"no entertainment area named {AREA_NAME!r}")
+    raise SystemExit(f"no entertainment area named {AREA_NAME!r}; found {names}")
 
 
 def all_lights_group():
